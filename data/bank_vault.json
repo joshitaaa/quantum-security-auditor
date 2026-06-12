@@ -1,0 +1,34 @@
+{
+  "vault_metadata": {
+    "encryption": "RSA-512",
+    "key_id": "VAULT-KEY-2019-001",
+    "created": "2019-03-14",
+    "institution": "MNB Singapore — Core Banking"
+  },
+  "transactions": [
+    {
+      "txn_id": "TXN-20240301-00192",
+      "timestamp": "2024-03-01T09:14:33Z",
+      "type": "SWIFT_MT103",
+      "sender": { "account": "SG29DBSS10881234567890", "bic": "DBSSSGSG", "name": "Meridian Capital Pte Ltd" },
+      "receiver": { "account": "GB29NWBK60161331926819", "bic": "NWBKGB2L", "name": "Barclays Trade Finance" },
+      "amount_sgd": 2850000.00,
+      "currency": "SGD",
+      "reference": "INV-MCP-2024-0091",
+      "payload_encrypted": "BASE64_RSA512_CIPHERTEXT_HERE",
+      "risk_level": null
+    },
+    {
+      "txn_id": "TXN-20240301-00193",
+      "timestamp": "2024-03-01T09:22:11Z",
+      "type": "ACH_CREDIT",
+      "sender": { "account": "056-001-1234567", "routing": "021000021", "name": "Orchard Wealth Management" },
+      "receiver": { "account": "056-001-9876543", "routing": "026009593", "name": "Ngee Ann Provident Fund" },
+      "amount_sgd": 450000.00,
+      "currency": "SGD",
+      "reference": "PAYROLL-Q1-2024",
+      "payload_encrypted": "BASE64_RSA512_CIPHERTEXT_HERE",
+      "risk_level": null
+    }
+  ]
+}
