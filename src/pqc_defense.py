@@ -1,7 +1,9 @@
 """
-Classical PQC Defense Module
-Simulates ML-KEM (Kyber) key encapsulation using pqcrypto / liboqs Python bindings.
-Falls back to AES-256-GCM with HKDF if liboqs unavailable (for demo environments).
+PQC defense module for payment vault protection.
+
+ML-KEM is used to establish a shared secret, then AES-256-GCM encrypts each
+transaction payload. If liboqs is unavailable, the module uses a clearly marked
+simulation fallback so the project remains runnable in demo environments.
 """
 
 import json, os, hashlib, struct
@@ -9,7 +11,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 
-# Try real Kyber (requires liboqs); fall back to AES-256 simulation
+# Try real ML-KEM/Kyber (requires liboqs); fall back to AES-256 simulation.
 try:
     import oqs
     KYBER_AVAILABLE = True
@@ -19,7 +21,12 @@ except ImportError:
 
 def kyber_keygen():
     if KYBER_AVAILABLE:
-        kem = oqs.KeyEncapsulation("Kyber768")
+        kem_name = "ML-KEM-768"
+        try:
+            kem = oqs.KeyEncapsulation(kem_name)
+        except Exception:
+            kem_name = "Kyber768"
+            kem = oqs.KeyEncapsulation(kem_name)
         public_key = kem.generate_keypair()
         return kem, public_key
     else:
@@ -51,7 +58,7 @@ def pqc_encrypt_transaction(txn: dict, shared_secret: bytes) -> dict:
     ciphertext = aesgcm.encrypt(nonce, plaintext, None)
     return {
         "txn_id":     txn["txn_id"],
-        "algorithm":  "ML-KEM-768 + AES-256-GCM" if KYBER_AVAILABLE else "Simulated-Kyber + AES-256-GCM",
+        "algorithm":  "ML-KEM-768 + AES-256-GCM" if KYBER_AVAILABLE else "Simulated-ML-KEM-768 + AES-256-GCM",
         "nonce_hex":  nonce.hex(),
         "cipher_hex": ciphertext.hex(),
         "pqc_status": "PROTECTED"
@@ -61,7 +68,7 @@ def pqc_encrypt_transaction(txn: dict, shared_secret: bytes) -> dict:
 def defend_vault(vault: dict, risk_report: dict) -> dict:
     """Full vault re-encryption pipeline."""
     print(f"\n[PQC] Initiating post-quantum re-encryption...")
-    print(f"[PQC] Using {'liboqs Kyber768' if KYBER_AVAILABLE else 'Simulated Kyber768 (AES fallback)'}")
+    print(f"[PQC] Using {'liboqs ML-KEM-768' if KYBER_AVAILABLE else 'Simulated ML-KEM-768 (AES fallback)'}")
 
     kem_obj, public_key = kyber_keygen()
     kt_obj, shared_secret = kyber_encapsulate(public_key)
