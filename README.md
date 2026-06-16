@@ -66,7 +66,7 @@ python src/main.py \
 ## Run the Payment UI
 
 ```bash
-streamlit run src/payment_ui.py
+streamlit run src/score_payment_tx_ui.py
 ```
 
 The UI lets a business user:
@@ -76,6 +76,17 @@ The UI lets a business user:
 - Enter the payment amount.
 - Receive a 0-100 security score, risk rating, findings, and recommendation.
 - View the algorithm scorecard and run local benchmarks.
+
+## Run the Notebooks
+
+Notebook versions are included for direct, visual output inspection:
+
+```bash
+jupyter notebook src/score_payment_tx_ui.ipynb
+jupyter notebook src/algorithm_benchmark.ipynb
+```
+
+Use `src/score_payment_tx_ui.ipynb` to score sample encrypted payment transactions and compare business scenarios. Use `src/algorithm_benchmark.ipynb` to display the algorithm scorecard and local benchmark table.
 
 ## Security Score Logic
 
@@ -114,7 +125,9 @@ Local timings vary by machine and by whether `liboqs-python` is installed. Expec
 - `src/pqc_defense.py`: ML-KEM plus AES-256-GCM vault re-encryption.
 - `src/crypto_algorithms.py`: algorithm catalog and transaction scoring logic.
 - `src/algorithm_benchmark.py`: RSA/PQC benchmark harness.
-- `src/payment_ui.py`: Streamlit UI for payment transaction scoring.
+- `src/score_payment_tx_ui.py`: Streamlit UI for payment transaction scoring.
+- `src/score_payment_tx_ui.ipynb`: Notebook for visual payment transaction scoring.
+- `src/algorithm_benchmark.ipynb`: Notebook for visual benchmark and scorecard output.
 
 ## Future Improvements
 
