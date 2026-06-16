@@ -29,17 +29,39 @@ def display_banner():
 
 
 def print_algorithm_comparison(iterations: int = 5):
-    from benchmarks.algorithm_benchmark import benchmark_algorithms
+    from benchmarks.algorithm_benchmark import attack_estimates_as_dicts, benchmark_algorithms, toy_crack_results_as_dicts
 
     print("\n[COMPARE] Payment security algorithm benchmark")
     print("[COMPARE] Primitive types differ: KEM/encryption protects payload keys; signatures authorize transactions.\n")
-    header = f"{'Algorithm':<15} {'Primitive':<26} {'Impl':<22} {'Avg ms':>8} {'P95 ms':>8} {'Score':>7} {'PQ-safe':>8}"
+    header = (
+        f"{'Algorithm':<15} {'Primitive':<26} {'Impl':<22} {'Avg ms':>8} {'P95 ms':>8} "
+        f"{'Posture':>7} {'Attack':>7} {'PQ-safe':>8}"
+    )
     print(header)
     print("-" * len(header))
     for result in benchmark_algorithms(iterations=iterations):
         print(
             f"{result.algorithm:<15} {result.primitive:<26} {result.implementation:<22} "
-            f"{result.avg_ms:>8.3f} {result.p95_ms:>8.3f} {result.security_score:>7} {str(result.quantum_safe):>8}"
+            f"{result.avg_ms:>8.3f} {result.p95_ms:>8.3f} {result.security_score:>7} "
+            f"{result.attack_time_score:>7} {str(result.quantum_safe):>8}"
+        )
+    print("\n[TOY CRACK] Actual brute-force demo against intentionally tiny key spaces:")
+    toy_header = f"{'Algorithm':<15} {'Toy bits':>8} {'Keyspace':>10} {'Crack ms':>10} {'Toy score':>10}"
+    print(toy_header)
+    print("-" * len(toy_header))
+    for row in toy_crack_results_as_dicts():
+        print(
+            f"{row['algorithm']:<15} {row['toy_key_bits']:>8} {row['toy_keyspace']:>10} "
+            f"{row['crack_time_ms']:>10.3f} {row['toy_crack_score']:>10}"
+        )
+    print("\n[ATTACK ESTIMATE] Estimated real-parameter attack resistance:")
+    estimate_header = f"{'Algorithm':<15} {'Classical attack':>22} {'Quantum attack':>22} {'Attack':>7}"
+    print(estimate_header)
+    print("-" * len(estimate_header))
+    for row in attack_estimates_as_dicts():
+        print(
+            f"{row['algorithm']:<15} {row['estimated_classical_attack_years']:>22} "
+            f"{row['estimated_quantum_attack_years']:>22} {row['attack_time_score']:>7}"
         )
     print("\n[COMPARE] Recommended deployment profile: ML-KEM-768 for encrypted payment keys + ML-DSA-65 for authorization signatures.")
     print("[COMPARE] Add SLH-DSA and HQC to the roadmap as backup families for crypto-agility.\n")

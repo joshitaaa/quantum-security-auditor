@@ -57,9 +57,16 @@ cd src
 python -m cli.auditor_cli --compare --iterations 5
 ```
 
-The comparison prints local average and p95 operation time, security score, and quantum-safe status for RSA, ML-KEM, ML-DSA, SLH-DSA, and HQC.
+The comparison prints local average and p95 operation time, posture score, attack-time score, toy-crack score, estimated attack time, and quantum-safe status for RSA, ML-KEM, ML-DSA, SLH-DSA, and HQC.
 
 Important interpretation: ML-KEM is a KEM/encryption primitive, while ML-DSA and SLH-DSA are signature primitives. They should not be treated as direct drop-in substitutes for each other. A payment deployment should normally use ML-KEM-768 for encrypting transaction data keys and ML-DSA-65 for authorization signatures.
+
+The CLI, Streamlit benchmark tab, and benchmark notebook include two crack-time views:
+
+- `toy_crack_score`: actual brute-force time against intentionally tiny demo key spaces using the same transaction payload for every algorithm label.
+- `attack_time_score`: estimated classical/quantum attack years from brute-force-equivalent security strength and local trial-rate calibration.
+
+The toy crack is real, but it is only a bounded classroom demonstration. It is not a real crack of standardized RSA-2048, ML-KEM, ML-DSA, SLH-DSA, or HQC parameters.
 
 ## Generate Demo Vault Data
 
@@ -125,12 +132,14 @@ http://localhost:8866
 
 ## Security Score Logic
 
-The score is deterministic and explainable:
+The transaction score is deterministic and explainable:
 
 - Base algorithm posture: RSA-2048 starts at 46, ML-KEM-768 at 93, ML-DSA-65 at 91, SLH-DSA-128s at 84, and HQC-128 at 82.
 - Quantum safety: RSA receives an additional penalty because Shor's algorithm threatens integer-factorization cryptography.
 - Ciphertext hygiene: empty, very short, invalid base64/hex, or low-entropy payloads lose points.
 - Business exposure: high-value payments and cross-border channels receive additional risk penalties when not quantum-safe.
+- Toy crack score: benchmark notebook outputs include `toy_crack_score`, based on actual brute-force time against intentionally tiny demo key spaces.
+- Attack-time score: benchmark outputs include `attack_time_score`, based on estimated classical/quantum attack years from security-strength assumptions and local trial-rate calibration.
 
 Risk rating:
 

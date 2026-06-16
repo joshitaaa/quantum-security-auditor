@@ -15,7 +15,7 @@ import pandas as pd
 import streamlit as st
 
 from algorithms.crypto_algorithms import ALGORITHM_PROFILES, list_algorithm_profiles, score_encrypted_transaction
-from benchmarks.algorithm_benchmark import benchmark_results_as_dicts
+from benchmarks.algorithm_benchmark import attack_estimates_as_dicts, benchmark_results_as_dicts, toy_crack_results_as_dicts
 
 
 SAMPLE_TRANSACTIONS: dict[str, dict[str, Any]] = {
@@ -213,21 +213,60 @@ def render_scorecard_tab() -> None:
 
 
 def render_benchmark_tab() -> None:
-    st.subheader("Performance Comparison")
+    st.subheader("Performance and Attack-Resistance Comparison")
     control_col, status_col = st.columns([1, 2])
     with control_col:
         iterations = st.slider("Benchmark iterations", min_value=1, max_value=20, value=5)
         run_benchmark = st.button("Run Benchmark", type="primary")
     with status_col:
-        st.write("Benchmark output uses real crypto libraries when available and simulation fallback otherwise.")
+        st.write(
+            "Benchmark output uses real crypto libraries when available and simulation fallback otherwise. "
+            "Toy crack results use intentionally tiny key spaces and are not real cracks of standardized parameters."
+        )
 
     if run_benchmark or "benchmark_results" not in st.session_state:
         with st.spinner("Running local benchmark..."):
             st.session_state["benchmark_results"] = benchmark_results_as_dicts(iterations)
+            st.session_state["toy_crack_results"] = toy_crack_results_as_dicts()
+            st.session_state["attack_estimates"] = attack_estimates_as_dicts()
 
     benchmark_df = pd.DataFrame(st.session_state["benchmark_results"])
+    st.write("Operation Benchmark and Security Scores")
     st.dataframe(benchmark_df, use_container_width=True, hide_index=True)
     st.bar_chart(benchmark_df.set_index("algorithm")["avg_ms"])
+
+    toy_crack_df = pd.DataFrame(st.session_state["toy_crack_results"])
+    st.write("Toy Crack Demo")
+    st.dataframe(
+        toy_crack_df[
+            [
+                "algorithm",
+                "toy_key_bits",
+                "toy_keyspace",
+                "crack_time_ms",
+                "toy_crack_score",
+                "notes",
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    attack_df = pd.DataFrame(st.session_state["attack_estimates"])
+    st.write("Attack-Time Estimate")
+    st.dataframe(
+        attack_df[
+            [
+                "algorithm",
+                "estimated_classical_attack_years",
+                "estimated_quantum_attack_years",
+                "attack_time_score",
+                "attack_model",
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
 
 
 def render_export_tab() -> None:
