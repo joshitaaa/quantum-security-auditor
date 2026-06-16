@@ -26,7 +26,7 @@ except ImportError:
     hashes = serialization = padding = rsa = AESGCM = None
     CRYPTOGRAPHY_AVAILABLE = False
 
-from crypto_algorithms import ALGORITHM_PROFILES
+from algorithms.crypto_algorithms import ALGORITHM_PROFILES
 
 try:
     import oqs  # type: ignore

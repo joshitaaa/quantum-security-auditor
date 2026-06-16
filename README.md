@@ -22,6 +22,12 @@ ML-KEM and ML-DSA are the main algorithms requested for integration. SLH-DSA and
 pip install -r requirements.txt
 ```
 
+For package-style development, install the project in editable mode:
+
+```bash
+pip install -e .
+```
+
 Optional real PQC support:
 
 ```bash
@@ -33,7 +39,8 @@ If `liboqs-python` is not installed, PQC benchmark operations run in simulation 
 ## Run the Vault Auditor
 
 ```bash
-python src/main.py
+cd src
+python -m cli.auditor_cli
 ```
 
 Default flow:
@@ -46,17 +53,32 @@ Default flow:
 ## Compare Algorithms
 
 ```bash
-python src/main.py --compare --iterations 5
+cd src
+python -m cli.auditor_cli --compare --iterations 5
 ```
 
 The comparison prints local average and p95 operation time, security score, and quantum-safe status for RSA, ML-KEM, ML-DSA, SLH-DSA, and HQC.
 
 Important interpretation: ML-KEM is a KEM/encryption primitive, while ML-DSA and SLH-DSA are signature primitives. They should not be treated as direct drop-in substitutes for each other. A payment deployment should normally use ML-KEM-768 for encrypting transaction data keys and ML-DSA-65 for authorization signatures.
 
+## Generate Demo Vault Data
+
+```bash
+cd src
+python -m data_tools.generate_vault_data
+```
+
+After `pip install -e .`, you can also run:
+
+```bash
+generate-vault-data
+```
+
 ## Score an Encrypted Payment
 
 ```bash
-python src/main.py \
+cd src
+python -m cli.auditor_cli \
   --score-transaction "BASE64_OR_HEX_CIPHERTEXT" \
   --algorithm ML-KEM-768 \
   --amount-sgd 250000 \
@@ -66,16 +88,17 @@ python src/main.py \
 ## Run the Payment UI
 
 ```bash
-streamlit run src/score_payment_tx_ui.py
+streamlit run src/ui/payment_security_web_app.py
 ```
 
 The UI lets a business user:
 
-- Select the payment channel and cryptographic algorithm.
-- Paste an encrypted transaction payload.
-- Enter the payment amount.
+- Load sample payment transactions for RSA, ML-KEM, and ML-DSA scenarios.
+- Edit transaction ID, payment channel, amount, algorithm, and encrypted payload.
 - Receive a 0-100 security score, risk rating, findings, and recommendation.
+- Compare multiple business scenarios in a table and score chart.
 - View the algorithm scorecard and run local benchmarks.
+- Export the current assessment as JSON.
 
 ## Run the Notebooks
 
@@ -86,7 +109,19 @@ jupyter notebook src/score_payment_tx_ui.ipynb
 jupyter notebook src/algorithm_benchmark.ipynb
 ```
 
-Use `src/score_payment_tx_ui.ipynb` to score sample encrypted payment transactions and compare business scenarios. Use `src/algorithm_benchmark.ipynb` to display the algorithm scorecard and local benchmark table.
+Use `src/score_payment_tx_ui.ipynb` for a notebook-native interactive Score Payment form. Use `src/algorithm_benchmark.ipynb` to display the algorithm scorecard and local benchmark table.
+
+To access the Score Payment notebook as a Chrome-friendly web page, run it with Voilà:
+
+```bash
+voila src/score_payment_tx_ui.ipynb --port 8866 --Voila.ip=127.0.0.1
+```
+
+Then open this URL in Chrome:
+
+```text
+http://localhost:8866
+```
 
 ## Security Score Logic
 
@@ -120,12 +155,14 @@ Local timings vary by machine and by whether `liboqs-python` is installed. Expec
 
 ## Key Files
 
-- `src/main.py`: CLI orchestration for audit, comparison, and transaction scoring.
-- `src/quantum_auditor.py`: Shor/QFT simulation and RSA quantum risk estimate.
-- `src/pqc_defense.py`: ML-KEM plus AES-256-GCM vault re-encryption.
-- `src/crypto_algorithms.py`: algorithm catalog and transaction scoring logic.
-- `src/algorithm_benchmark.py`: RSA/PQC benchmark harness.
-- `src/score_payment_tx_ui.py`: Streamlit UI for payment transaction scoring.
+- `pyproject.toml`: package metadata, dependencies, and console script configuration.
+- `src/cli/auditor_cli.py`: CLI orchestration for audit, comparison, and transaction scoring.
+- `src/algorithms/crypto_algorithms.py`: algorithm catalog and transaction scoring logic.
+- `src/algorithms/quantum_auditor.py`: Shor/QFT simulation and RSA quantum risk estimate.
+- `src/algorithms/pqc_defense.py`: ML-KEM plus AES-256-GCM vault re-encryption.
+- `src/benchmarks/algorithm_benchmark.py`: RSA/PQC benchmark harness.
+- `src/ui/payment_security_web_app.py`: Streamlit web app for payment transaction scoring.
+- `src/data_tools/generate_vault_data.py`: PaySim-to-vault generation logic.
 - `src/score_payment_tx_ui.ipynb`: Notebook for visual payment transaction scoring.
 - `src/algorithm_benchmark.ipynb`: Notebook for visual benchmark and scorecard output.
 

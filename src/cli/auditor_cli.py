@@ -6,16 +6,20 @@ Threat detection -> Quantum Audit -> PQC Defense -> Payment scoring
 import argparse
 import json
 from pathlib import Path
-from crypto_algorithms import ALGORITHM_PROFILES, score_encrypted_transaction
 
-VAULT_PATH = Path(__file__).parent.parent / "data" / "bank_vault.json"
-OUTPUT_PATH = Path(__file__).parent.parent / "data" / "bank_vault_pqc_secured.json"
+from algorithms.crypto_algorithms import ALGORITHM_PROFILES, score_encrypted_transaction
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+VAULT_PATH = PROJECT_ROOT / "data" / "bank_vault.json"
+OUTPUT_PATH = PROJECT_ROOT / "data" / "bank_vault_pqc_secured.json"
 
 RISK_THRESHOLD = {"CRITICAL", "HIGH"}
+
 
 def load_vault():
     with open(VAULT_PATH) as f:
         return json.load(f)
+
 
 def display_banner():
     print("=" * 60)
@@ -25,7 +29,7 @@ def display_banner():
 
 
 def print_algorithm_comparison(iterations: int = 5):
-    from algorithm_benchmark import benchmark_algorithms
+    from benchmarks.algorithm_benchmark import benchmark_algorithms
 
     print("\n[COMPARE] Payment security algorithm benchmark")
     print("[COMPARE] Primitive types differ: KEM/encryption protects payload keys; signatures authorize transactions.\n")
@@ -57,8 +61,8 @@ def print_transaction_score(payload: str, algorithm: str, amount_sgd: float, cha
 
 
 def run_vault_audit():
-    from pqc_defense import defend_vault
-    from quantum_auditor import estimate_quantum_risk
+    from algorithms.pqc_defense import defend_vault
+    from algorithms.quantum_auditor import estimate_quantum_risk
 
     display_banner()
 
@@ -67,7 +71,6 @@ def run_vault_audit():
     print(f"\n[AUDIT] Detected encryption: RSA-{key_bits}")
     print(f"[AUDIT] Running quantum threat simulation...\n")
 
-    # Step 1: Quantum threat assessment
     report = estimate_quantum_risk(key_bits)
 
     print(f"[RESULT] Risk Score      : {report['risk_score']}")
@@ -78,7 +81,6 @@ def run_vault_audit():
     print(f"\n[SIM] Circuit Diagram (simplified):\n{report['circuit_diagram']}")
     print(f"\n[SIM] Measurement Outcomes: {report['sim_counts']}")
 
-    # Step 2: Route to PQC defense if high risk
     if report["risk_score"] in RISK_THRESHOLD:
         print(f"\n[ALERT] {report['risk_score']} quantum threat detected!")
         print("[ROUTE] Routing to PQC Defense Module...\n")
