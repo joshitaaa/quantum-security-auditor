@@ -6,13 +6,13 @@ The business scenario is payment transaction protection: encrypted payment paylo
 
 ## Implemented Algorithms
 
-| Algorithm | Role | Status | Project use |
-| --- | --- | --- | --- |
-| RSA-2048 | Classical encryption/signature baseline | Legacy classical | Performance and security comparison baseline |
-| ML-KEM-768 | Key encapsulation for encryption | NIST FIPS 203 | Primary PQC option for protecting payment data keys |
-| ML-DSA-65 | Digital signature | NIST FIPS 204 | Primary PQC option for transaction authorization |
-| SLH-DSA-128s | Hash-based digital signature | NIST FIPS 205 | Recommended backup signature family |
-| HQC-128 | Code-based KEM | NIST selected in 2025 for future standardization | Recommended backup KEM family for crypto-agility |
+| Algorithm    | Role                                    | Status                                           | Project use                                         |
+| ------------ | --------------------------------------- | ------------------------------------------------ | --------------------------------------------------- |
+| RSA-2048     | Classical encryption/signature baseline | Legacy classical                                 | Performance and security comparison baseline        |
+| ML-KEM-768   | Key encapsulation for encryption        | NIST FIPS 203                                    | Primary PQC option for protecting payment data keys |
+| ML-DSA-65    | Digital signature                       | NIST FIPS 204                                    | Primary PQC option for transaction authorization    |
+| SLH-DSA-128s | Hash-based digital signature            | NIST FIPS 205                                    | Recommended backup signature family                 |
+| HQC-128      | Code-based KEM                          | NIST selected in 2025 for future standardization | Recommended backup KEM family for crypto-agility    |
 
 ML-KEM and ML-DSA are the main algorithms requested for integration. SLH-DSA and HQC are included as recommended comparison algorithms because payment systems need backup families with different mathematical assumptions.
 
@@ -143,24 +143,46 @@ The transaction score is deterministic and explainable:
 
 Risk rating:
 
-| Score | Rating |
-| --- | --- |
-| 85-100 | LOW |
-| 70-84 | MEDIUM |
-| 50-69 | HIGH |
-| 0-49 | CRITICAL |
+| Score  | Rating   |
+| ------ | -------- |
+| 85-100 | LOW      |
+| 70-84  | MEDIUM   |
+| 50-69  | HIGH     |
+| 0-49   | CRITICAL |
 
-## Example Comparison Result
+## Comparison Result
 
-Local timings vary by machine and by whether `liboqs-python` is installed. Expected security posture:
+`iterations = 5` is a reasonable default for this project. It smooths single-run timing noise while keeping the benchmark fast enough for notebooks and classroom demos. Local timings vary by machine and by whether `liboqs-python` is installed. The example below was measured on this workspace using simulation fallback for PQC operations.
 
-| Algorithm | Expected security score | Payment recommendation |
-| --- | ---: | --- |
-| RSA-2048 | 46 | Migrate away for long-lived payment confidentiality |
-| ML-KEM-768 | 93 | Use for PQC key establishment and payload encryption |
-| ML-DSA-65 | 91 | Use for PQC transaction signatures |
-| SLH-DSA-128s | 84 | Keep as conservative backup signature family |
-| HQC-128 | 82 | Track as backup KEM for crypto-agility |
+Operation benchmark:
+
+| Algorithm    | Impl                | Avg ms | P95 ms | Posture score | Attack-time score | PQ-safe |
+| ------------ | ------------------- | -----: | -----: | ------------: | ----------------: | ------- |
+| RSA-2048     | simulation fallback |  0.623 |  1.068 |            46 |                35 | No      |
+| ML-KEM-768   | simulation fallback |  0.014 |  0.026 |            93 |               100 | Yes     |
+| ML-DSA-65    | simulation fallback |  0.185 |  0.251 |            91 |               100 | Yes     |
+| SLH-DSA-128s | simulation fallback |  0.308 |  0.343 |            84 |                75 | Yes     |
+| HQC-128      | simulation fallback |  0.015 |  0.027 |            82 |                75 | Yes     |
+
+Toy crack demo:
+
+| Algorithm    | Toy key bits | Toy keyspace | Crack ms | Toy crack score |
+| ------------ | -----------: | -----------: | -------: | --------------: |
+| RSA-2048     |           12 |        4,096 |   11.009 |              25 |
+| HQC-128      |           14 |       16,384 |   27.977 |              45 |
+| SLH-DSA-128s |           14 |       16,384 |   48.930 |              45 |
+| ML-KEM-768   |           15 |       32,768 |   93.336 |              45 |
+| ML-DSA-65    |           15 |       32,768 |   71.650 |              45 |
+
+Attack-time estimate:
+
+| Algorithm    | Estimated classical attack | Estimated quantum attack | Attack-time score |
+| ------------ | -------------------------: | -----------------------: | ----------------: |
+| RSA-2048     |              ~1e19.9 years |              10.00 years |                35 |
+| ML-KEM-768   |              ~1e44.0 years |            ~1e24.7 years |               100 |
+| ML-DSA-65    |              ~1e44.0 years |            ~1e24.7 years |               100 |
+| SLH-DSA-128s |              ~1e24.7 years |             ~1e5.4 years |                75 |
+| HQC-128      |              ~1e24.7 years |             ~1e5.4 years |                75 |
 
 ## Key Files
 
