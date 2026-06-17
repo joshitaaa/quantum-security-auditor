@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantum-security-auditor"
+version = "0.1.0"
+description = "Quantum-ready payment transaction security auditor with PQC scoring and benchmarks."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "qiskit>=1.0.0,<1.3.0",
+    "qiskit-aer>=0.14.0,<0.15.0",
+    "matplotlib>=3.7.0,<3.8.0",
+    "cryptography>=42.0.0,<43.0.0",
+    "pycryptodome>=3.20.0",
+    "pandas>=2.0.0,<2.1.0",
+    "streamlit>=1.32.0,<1.41.0",
+    "notebook>=7.0.0,<7.3.0",
+    "ipywidgets>=8.1.0,<9.0.0",
+    "voila>=0.5.0,<0.6.0",
+]
+
+[project.optional-dependencies]
+pqc = ["liboqs-python>=0.10.0"]
+
+[project.scripts]
+quantum-security-auditor = "cli.auditor_cli:main"
+generate-vault-data = "data_tools.generate_vault_data:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["algorithms*", "benchmarks*", "cli*", "ui*", "data_tools*"]

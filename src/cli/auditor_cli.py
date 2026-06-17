@@ -1,0 +1,146 @@
+"""
+AQCA Hybrid Orchestration Loop
+Threat detection -> Quantum Audit -> PQC Defense -> Payment scoring
+"""
+
+import argparse
+import json
+from pathlib import Path
+
+from algorithms.crypto_algorithms import ALGORITHM_PROFILES, score_encrypted_transaction
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+VAULT_PATH = PROJECT_ROOT / "data" / "bank_vault.json"
+OUTPUT_PATH = PROJECT_ROOT / "data" / "bank_vault_pqc_secured.json"
+
+RISK_THRESHOLD = {"CRITICAL", "HIGH"}
+
+
+def load_vault():
+    with open(VAULT_PATH) as f:
+        return json.load(f)
+
+
+def display_banner():
+    print("=" * 60)
+    print("  AQCA - Automated Quantum Cryptographic Auditor v1.1")
+    print("  Threat Framework: Shor's Algorithm / QFT Simulation")
+    print("=" * 60)
+
+
+def print_algorithm_comparison(iterations: int = 5):
+    from benchmarks.algorithm_benchmark import attack_estimates_as_dicts, benchmark_algorithms, toy_crack_results_as_dicts
+
+    print("\n[COMPARE] Payment security algorithm benchmark")
+    print("[COMPARE] Primitive types differ: KEM/encryption protects payload keys; signatures authorize transactions.\n")
+    header = (
+        f"{'Algorithm':<15} {'Primitive':<26} {'Impl':<22} {'Avg ms':>8} {'P95 ms':>8} "
+        f"{'Posture':>7} {'Attack':>7} {'PQ-safe':>8}"
+    )
+    print(header)
+    print("-" * len(header))
+    for result in benchmark_algorithms(iterations=iterations):
+        print(
+            f"{result.algorithm:<15} {result.primitive:<26} {result.implementation:<22} "
+            f"{result.avg_ms:>8.3f} {result.p95_ms:>8.3f} {result.security_score:>7} "
+            f"{result.attack_time_score:>7} {str(result.quantum_safe):>8}"
+        )
+    print("\n[TOY CRACK] Actual brute-force demo against intentionally tiny key spaces:")
+    toy_header = f"{'Algorithm':<15} {'Toy bits':>8} {'Keyspace':>10} {'Crack ms':>10} {'Toy score':>10}"
+    print(toy_header)
+    print("-" * len(toy_header))
+    for row in toy_crack_results_as_dicts():
+        print(
+            f"{row['algorithm']:<15} {row['toy_key_bits']:>8} {row['toy_keyspace']:>10} "
+            f"{row['crack_time_ms']:>10.3f} {row['toy_crack_score']:>10}"
+        )
+    print("\n[ATTACK ESTIMATE] Estimated real-parameter attack resistance:")
+    estimate_header = f"{'Algorithm':<15} {'Classical attack':>22} {'Quantum attack':>22} {'Attack':>7}"
+    print(estimate_header)
+    print("-" * len(estimate_header))
+    for row in attack_estimates_as_dicts():
+        print(
+            f"{row['algorithm']:<15} {row['estimated_classical_attack_years']:>22} "
+            f"{row['estimated_quantum_attack_years']:>22} {row['attack_time_score']:>7}"
+        )
+    print("\n[COMPARE] Recommended deployment profile: ML-KEM-768 for encrypted payment keys + ML-DSA-65 for authorization signatures.")
+    print("[COMPARE] Add SLH-DSA and HQC to the roadmap as backup families for crypto-agility.\n")
+
+
+def print_transaction_score(payload: str, algorithm: str, amount_sgd: float, channel: str):
+    result = score_encrypted_transaction(payload, algorithm, amount_sgd, channel)
+    print("\n[PAYMENT SCORE]")
+    print(f"Algorithm       : {result['algorithm']}")
+    print(f"Security Score  : {result['score']}/100")
+    print(f"Risk Rating     : {result['risk_rating']}")
+    print(f"Quantum Safe    : {result['quantum_safe']}")
+    print(f"Cipher Entropy  : {result['entropy']}")
+    print(f"Valid Encoding  : {result['valid_encoding']}")
+    print("Findings:")
+    for finding in result["findings"]:
+        print(f"  - {finding}")
+    print(f"Recommendation  : {result['recommendation']}\n")
+
+
+def run_vault_audit():
+    from algorithms.pqc_defense import defend_vault
+    from algorithms.quantum_auditor import estimate_quantum_risk
+
+    display_banner()
+
+    vault = load_vault()
+    key_bits = 512  # deliberately weak RSA key size in vault
+    print(f"\n[AUDIT] Detected encryption: RSA-{key_bits}")
+    print(f"[AUDIT] Running quantum threat simulation...\n")
+
+    report = estimate_quantum_risk(key_bits)
+
+    print(f"[RESULT] Risk Score      : {report['risk_score']}")
+    print(f"[RESULT] Logical Qubits  : {report['logical_qubits_real']:,}")
+    print(f"[RESULT] Physical Qubits : {report['physical_qubits_real']:,} (surface code)")
+    print(f"[RESULT] Projected Break : {report['projected_break_year']}")
+    print(f"[RESULT] Gate Depth Real : {report['gate_depth_real']:,}")
+    print(f"\n[SIM] Circuit Diagram (simplified):\n{report['circuit_diagram']}")
+    print(f"\n[SIM] Measurement Outcomes: {report['sim_counts']}")
+
+    if report["risk_score"] in RISK_THRESHOLD:
+        print(f"\n[ALERT] {report['risk_score']} quantum threat detected!")
+        print("[ROUTE] Routing to PQC Defense Module...\n")
+
+        secured_vault = defend_vault(vault, report)
+
+        with open(OUTPUT_PATH, "w") as f:
+            json.dump(secured_vault, f, indent=2)
+
+        print(f"\n[DONE] Secured vault written to: {OUTPUT_PATH}")
+    else:
+        print("[OK] Risk within acceptable threshold. No PQC upgrade triggered.")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Quantum Security Auditor for payment transactions.")
+    parser.add_argument("--compare", action="store_true", help="Benchmark and score RSA, ML-KEM, ML-DSA, SLH-DSA, and HQC.")
+    parser.add_argument("--iterations", type=int, default=5, help="Benchmark iterations per algorithm.")
+    parser.add_argument("--score-transaction", type=str, help="Encrypted payload to score from the command line.")
+    parser.add_argument("--algorithm", choices=sorted(ALGORITHM_PROFILES), default="RSA-2048", help="Algorithm used for the encrypted payload.")
+    parser.add_argument("--amount-sgd", type=float, default=0.0, help="Payment amount in SGD for exposure scoring.")
+    parser.add_argument("--channel", type=str, default="PAYMENT", help="Payment channel, for example SWIFT_MT103, ACH_CREDIT, or CARD.")
+    parser.add_argument("--skip-vault-audit", action="store_true", help="Do not run the original vault audit flow.")
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
+
+    if args.compare:
+        print_algorithm_comparison(args.iterations)
+
+    if args.score_transaction is not None:
+        print_transaction_score(args.score_transaction, args.algorithm, args.amount_sgd, args.channel)
+
+    if not args.compare and args.score_transaction is None and not args.skip_vault_audit:
+        run_vault_audit()
+
+
+if __name__ == "__main__":
+    main()
