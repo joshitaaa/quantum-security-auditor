@@ -197,10 +197,11 @@ def estimate_attack_resistance(attempts_per_second: float | None = None) -> list
     for algorithm, profile in ATTACK_PROFILES.items():
         classical_years = _years_from_security_bits(profile["classical_security_bits"], attempts_per_second)
         quantum_bits = profile["quantum_security_bits"]
-        quantum_years = None if quantum_bits <= 0 else _years_from_security_bits(quantum_bits, attempts_per_second)
-        attack_score = _score_from_years(quantum_years, ALGORITHM_PROFILES[algorithm].quantum_safe)
         if algorithm == "RSA-2048":
             quantum_years = float(profile["quantum_years"])
+        else:
+            quantum_years = None if quantum_bits <= 0 else _years_from_security_bits(quantum_bits, attempts_per_second)
+        attack_score = _score_from_years(quantum_years, ALGORITHM_PROFILES[algorithm].quantum_safe)
 
         estimates.append(
             AttackEstimate(
@@ -326,7 +327,7 @@ def _rsa_payment_operation() -> None:
 
 
 def _oqs_kem_operation(algorithm_names: list[str]) -> Callable[[], None] | None:
-    if not OQS_AVAILABLE:
+    if not OQS_AVAILABLE or not CRYPTOGRAPHY_AVAILABLE:
         return None
     for algorithm_name in algorithm_names:
         try:
@@ -388,63 +389,68 @@ def _simulated_signature_operation(label: bytes, rounds: int) -> None:
 def benchmark_algorithms(iterations: int = 5) -> list[BenchmarkResult]:
     iterations = max(1, iterations)
     attack_estimates = {estimate.algorithm: estimate for estimate in estimate_attack_resistance()}
+    rsa_notes = (
+        "Legacy baseline: real RSA-OAEP key wrap, AES-GCM payload encryption, RSA-PSS signature."
+        if CRYPTOGRAPHY_AVAILABLE
+        else "Legacy baseline: simulation fallback because cryptography is not installed."
+    )
     candidates: list[tuple[str, str, str, Callable[[], None], str]] = [
         (
             "RSA-2048",
             "Encryption + signature",
             "cryptography real RSA" if CRYPTOGRAPHY_AVAILABLE else "simulation fallback",
             _rsa_payment_operation,
-            "Legacy baseline: real RSA-OAEP key wrap, AES-GCM payload encryption, RSA-PSS signature.",
+            rsa_notes,
         )
     ]
 
-    ml_kem_operation = _oqs_kem_operation(["ML-KEM-768", "Kyber768"]) or (
-        lambda: _simulated_kem_operation(b"ML-KEM-768")
-    )
+    ml_kem_operation = _oqs_kem_operation(["ML-KEM-768", "Kyber768"])
+    ml_kem_implementation = "liboqs" if ml_kem_operation else "simulation fallback"
+    ml_kem_operation = ml_kem_operation or (lambda: _simulated_kem_operation(b"ML-KEM-768"))
     candidates.append(
         (
             "ML-KEM-768",
             "KEM + AEAD encryption",
-            "liboqs" if OQS_AVAILABLE else "simulation fallback",
+            ml_kem_implementation,
             ml_kem_operation,
             "Primary PQC encryption/KEM path for protecting payment data keys.",
         )
     )
 
-    ml_dsa_operation = _oqs_signature_operation(["ML-DSA-65", "Dilithium3"]) or (
-        lambda: _simulated_signature_operation(b"ML-DSA-65", rounds=48)
-    )
+    ml_dsa_operation = _oqs_signature_operation(["ML-DSA-65", "Dilithium3"])
+    ml_dsa_implementation = "liboqs" if ml_dsa_operation else "simulation fallback"
+    ml_dsa_operation = ml_dsa_operation or (lambda: _simulated_signature_operation(b"ML-DSA-65", rounds=48))
     candidates.append(
         (
             "ML-DSA-65",
             "Digital signature",
-            "liboqs" if OQS_AVAILABLE else "simulation fallback",
+            ml_dsa_implementation,
             ml_dsa_operation,
             "Primary PQC transaction authorization signature.",
         )
     )
 
-    slh_dsa_operation = _oqs_signature_operation(["SLH-DSA-SHA2-128s", "SPHINCS+-SHA2-128s-simple"]) or (
-        lambda: _simulated_signature_operation(b"SLH-DSA-128s", rounds=96)
-    )
+    slh_dsa_operation = _oqs_signature_operation(["SLH-DSA-SHA2-128s", "SPHINCS+-SHA2-128s-simple"])
+    slh_dsa_implementation = "liboqs" if slh_dsa_operation else "simulation fallback"
+    slh_dsa_operation = slh_dsa_operation or (lambda: _simulated_signature_operation(b"SLH-DSA-128s", rounds=96))
     candidates.append(
         (
             "SLH-DSA-128s",
             "Digital signature",
-            "liboqs" if OQS_AVAILABLE else "simulation fallback",
+            slh_dsa_implementation,
             slh_dsa_operation,
             "Hash-based backup signature; useful for crypto-agility, usually heavier.",
         )
     )
 
-    hqc_operation = _oqs_kem_operation(["HQC-128"]) or (
-        lambda: _simulated_kem_operation(b"HQC-128")
-    )
+    hqc_operation = _oqs_kem_operation(["HQC-128"])
+    hqc_implementation = "liboqs" if hqc_operation else "simulation fallback"
+    hqc_operation = hqc_operation or (lambda: _simulated_kem_operation(b"HQC-128"))
     candidates.append(
         (
             "HQC-128",
             "KEM + AEAD encryption",
-            "liboqs" if OQS_AVAILABLE else "simulation fallback",
+            hqc_implementation,
             hqc_operation,
             "Code-based backup KEM candidate with different assumptions from ML-KEM.",
         )

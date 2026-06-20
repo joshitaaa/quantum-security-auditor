@@ -16,25 +16,51 @@ The business scenario is payment transaction protection: encrypted payment paylo
 
 ML-KEM and ML-DSA are the main algorithms requested for integration. SLH-DSA and HQC are included as recommended comparison algorithms because payment systems need backup families with different mathematical assumptions.
 
-## Setup
+## Setup and Run Notebooks
 
 ```bash
-pip install -r requirements.txt
-```
-
-For package-style development, install the project in editable mode:
-
-```bash
-pip install -e .
+python -m pip install -e .
 ```
 
 Optional real PQC support:
 
 ```bash
-pip install liboqs-python
+python -m pip install -e ".[pqc]"
 ```
 
-If `liboqs-python` is not installed, PQC benchmark operations run in simulation fallback mode. RSA operations use real `cryptography` primitives.
+If the editable install is not needed, the legacy requirements file is still available:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+`cryptography` is used for real RSA/AES operations. `liboqs-python` is optional; when it or a specific OQS algorithm is unavailable, the PQC benchmark uses a clearly marked `simulation fallback` implementation.
+
+After setup, open and run these notebooks directly in VS Code:
+
+- `src/score_payment_tx_ui.ipynb`: interactive Score Payment form for encrypted payment transaction scoring.
+- `src/algorithm_benchmark.ipynb`: algorithm scorecard, local benchmark table, toy crack demo, and attack-time estimate.
+
+In VS Code, select the Python environment where the setup command was run as the notebook kernel.
+
+You can also launch the notebooks from a browser:
+
+```bash
+jupyter notebook src/score_payment_tx_ui.ipynb
+jupyter notebook src/algorithm_benchmark.ipynb
+```
+
+To access the Score Payment notebook as a Chrome-friendly web page, run it with Voilà:
+
+```bash
+voila src/score_payment_tx_ui.ipynb --port 8866 --Voila.ip=127.0.0.1
+```
+
+Then open this URL in Chrome:
+
+```text
+http://localhost:8866
+```
 
 ## Run the Vault Auditor
 
@@ -61,25 +87,12 @@ The comparison prints local average and p95 operation time, posture score, attac
 
 Important interpretation: ML-KEM is a KEM/encryption primitive, while ML-DSA and SLH-DSA are signature primitives. They should not be treated as direct drop-in substitutes for each other. A payment deployment should normally use ML-KEM-768 for encrypting transaction data keys and ML-DSA-65 for authorization signatures.
 
-The CLI, Streamlit benchmark tab, and benchmark notebook include two crack-time views:
+The CLI and benchmark notebook include two crack-time views:
 
 - `toy_crack_score`: actual brute-force time against intentionally tiny demo key spaces using the same transaction payload for every algorithm label.
 - `attack_time_score`: estimated classical/quantum attack years from brute-force-equivalent security strength and local trial-rate calibration.
 
 The toy crack is real, but it is only a bounded classroom demonstration. It is not a real crack of standardized RSA-2048, ML-KEM, ML-DSA, SLH-DSA, or HQC parameters.
-
-## Generate Demo Vault Data
-
-```bash
-cd src
-python -m data_tools.generate_vault_data
-```
-
-After `pip install -e .`, you can also run:
-
-```bash
-generate-vault-data
-```
 
 ## Score an Encrypted Payment
 
@@ -92,54 +105,30 @@ python -m cli.auditor_cli \
   --channel SWIFT_MT103
 ```
 
-## Run the Payment UI
+## Payment Security Scoring Logic
 
-```bash
-streamlit run src/ui/payment_security_web_app.py
-```
+The project uses three related scores. They should be read together, not as a single cryptographic proof:
 
-The UI lets a business user:
+- `score`: the payment transaction score used by the CLI and Score Payment notebook.
+- `security_score`: the base algorithm posture used in benchmark tables.
+- `toy_crack_score` and `attack_time_score`: benchmark-only crack-time views.
 
-- Load sample payment transactions for RSA, ML-KEM, and ML-DSA scenarios.
-- Edit transaction ID, payment channel, amount, algorithm, and encrypted payload.
-- Receive a 0-100 security score, risk rating, findings, and recommendation.
-- Compare multiple business scenarios in a table and score chart.
-- View the algorithm scorecard and run local benchmarks.
-- Export the current assessment as JSON.
+Transaction score starts from the selected algorithm posture and applies business-facing penalties:
 
-## Run the Notebooks
+| Factor                          | Logic                                                                                                                                                                                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Base posture                    | RSA-2048 starts at 46, ML-KEM-768 at 93, ML-DSA-65 at 91, SLH-DSA-128s at 84, and HQC-128 at 82.                                                                                                                                                                   |
+| Quantum safety                  | RSA loses 20 additional points because Shor's algorithm threatens integer-factorization cryptography.                                                                                                                                                              |
+| Ciphertext hygiene              | Empty payloads lose 35 points, very short payloads lose 15, invalid base64/hex loses 10, and low entropy loses 10.                                                                                                                                                 |
+| Payment exposure                | This reflects business exposure and attacker incentive for harvest-now-decrypt-later collection.<br />It does not mean the algorithm becomes easier to break.<br />Payments of SGD 100,000 or more lose 4 points; payments of SGD 1,000,000 or more lose 8 points. |
+| Cross-border migration priority | This reflects the higher long-term sensitivity and migration priority of cross-border payment messages.<br />It does not mean the algorithm becomes easier to break.<br />Non-quantum-safe SWIFT/WIRE payments lose 7 additional points.                          |
 
-Notebook versions are included for direct, visual output inspection:
+Benchmark crack-time views:
 
-```bash
-jupyter notebook src/score_payment_tx_ui.ipynb
-jupyter notebook src/algorithm_benchmark.ipynb
-```
-
-Use `src/score_payment_tx_ui.ipynb` for a notebook-native interactive Score Payment form. Use `src/algorithm_benchmark.ipynb` to display the algorithm scorecard and local benchmark table.
-
-To access the Score Payment notebook as a Chrome-friendly web page, run it with Voilà:
-
-```bash
-voila src/score_payment_tx_ui.ipynb --port 8866 --Voila.ip=127.0.0.1
-```
-
-Then open this URL in Chrome:
-
-```text
-http://localhost:8866
-```
-
-## Security Score Logic
-
-The transaction score is deterministic and explainable:
-
-- Base algorithm posture: RSA-2048 starts at 46, ML-KEM-768 at 93, ML-DSA-65 at 91, SLH-DSA-128s at 84, and HQC-128 at 82.
-- Quantum safety: RSA receives an additional penalty because Shor's algorithm threatens integer-factorization cryptography.
-- Ciphertext hygiene: empty, very short, invalid base64/hex, or low-entropy payloads lose points.
-- Business exposure: high-value payments and cross-border channels receive additional risk penalties when not quantum-safe.
-- Toy crack score: benchmark notebook outputs include `toy_crack_score`, based on actual brute-force time against intentionally tiny demo key spaces.
-- Attack-time score: benchmark outputs include `attack_time_score`, based on estimated classical/quantum attack years from security-strength assumptions and local trial-rate calibration.
+| Score                 | Source                                                                                                                            | Purpose                                                                              |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `toy_crack_score`   | Actual brute-force time against intentionally tiny demo key spaces<br />using the same payment payload for every algorithm label. | Demonstrates how measured crack time changes as toy keyspace size changes.           |
+| `attack_time_score` | Estimated classical/quantum attack years from<br />brute-force-equivalent security bits and local trial-rate calibration.         | Gives a more realistic security-strength view for standardized algorithm parameters. |
 
 Risk rating:
 
