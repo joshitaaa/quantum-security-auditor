@@ -7,16 +7,38 @@ Run with:
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import base64
+import contextlib
+import io
 import json
+import math
 from typing import Any
 
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
 from algorithms.crypto_algorithms import ALGORITHM_PROFILES, list_algorithm_profiles, score_encrypted_transaction
+from algorithms.pqc_defense import defend_vault
+from algorithms.quantum_auditor import estimate_quantum_risk, run_innovative_circuit_demo
 from benchmarks.algorithm_benchmark import attack_estimates_as_dicts, benchmark_results_as_dicts, toy_crack_results_as_dicts
 
+
+_RISK_COLORS = {"LOW": "#157347", "MEDIUM": "#997404", "HIGH": "#b54708", "CRITICAL": "#b42318"}
+
+_DEMO_VAULT = {
+    "vault_metadata": {"encryption": "RSA-512", "key_id": "VAULT-KEY-LEGACY-001",
+                       "institution": "MNB Singapore - Core Banking (Demo)"},
+    "transactions": [
+        {"txn_id": "TXN-DEMO-00001", "type": "SWIFT_MT103", "amount": 2_850_000.0},
+        {"txn_id": "TXN-DEMO-00002", "type": "ACH_CREDIT",  "amount": 450_000.0},
+        {"txn_id": "TXN-DEMO-00003", "type": "WIRE",        "amount": 125_000.0},
+    ],
+}
 
 SAMPLE_TRANSACTIONS: dict[str, dict[str, Any]] = {
     "Legacy high-value SWIFT": {
@@ -57,6 +79,11 @@ def configure_page() -> None:
             border: 1px solid #e4e7ec;
             border-radius: 8px;
             padding: 12px 14px;
+        }
+        div[data-testid="stMetric"] label,
+        div[data-testid="stMetric"] div[data-testid="stMetricValue"],
+        div[data-testid="stMetric"] div[data-testid="stMetricValue"] > div {
+            color: #101828 !important;
         }
         .risk-low { color: #157347; font-weight: 700; }
         .risk-medium { color: #997404; font-weight: 700; }
@@ -292,12 +319,134 @@ def render_export_tab() -> None:
     st.json(export_payload)
 
 
+def render_quantum_tab() -> None:
+    st.subheader("Quantum Threat Engine")
+
+    # ── 1. Live Quantum Risk Analysis ──────────────────────────────────────
+    st.markdown("### Quantum Risk Analysis")
+    key_map = {
+        "RSA-512  (CRITICAL — ~2026)": 512,
+        "RSA-1024 (HIGH    — ~2029)": 1024,
+        "RSA-2048 (MEDIUM  — ~2033)": 2048,
+        "ECC-256  (proxy: RSA-512 quantum cost)": 512,
+    }
+    key_label = st.selectbox("Key to analyse", list(key_map.keys()))
+    if st.button("Run Quantum Risk Analysis", type="primary"):
+        with st.spinner("Running Qiskit period-finding simulation…"):
+            st.session_state["quantum_risk_report"] = estimate_quantum_risk(key_map[key_label])
+
+    report = st.session_state.get("quantum_risk_report")
+    if report:
+        st.markdown(
+            f"<p class='{risk_class(report['risk_score'])}'>Quantum Risk: {report['risk_score']}</p>",
+            unsafe_allow_html=True,
+        )
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Break Year",         str(report["projected_break_year"]))
+        c2.metric("Logical Qubits",     f"{report['logical_qubits_real']:,}")
+        c3.metric("Physical Qubits",    f"{report['physical_qubits_real']:,}")
+        c4.metric("Gate Depth (real)",  f"{report['gate_depth_real']:,}")
+        with st.expander("Circuit diagram"):
+            st.code(report["circuit_diagram"], language=None)
+        counts_df = (
+            pd.DataFrame({"state": list(report["sim_counts"].keys()),
+                          "shots": list(report["sim_counts"].values())})
+            .sort_values("state")
+        )
+        st.caption("Measurement counts (1 024 shots)")
+        st.bar_chart(counts_df.set_index("state")["shots"])
+
+    # ── 2. PQC Defense Demo ────────────────────────────────────────────────
+    st.markdown("### PQC Defense Demo")
+    col_before, col_after = st.columns(2)
+    col_before.write("**Before — RSA-512 vault**")
+    col_before.json({
+        "encryption": _DEMO_VAULT["vault_metadata"]["encryption"],
+        "transactions": len(_DEMO_VAULT["transactions"]),
+    })
+
+    if report and report["risk_score"] in {"HIGH", "CRITICAL"}:
+        if st.button("Activate PQC Defense", type="primary"):
+            buf = io.StringIO()
+            with st.spinner("Re-encrypting with ML-KEM-768…"):
+                with contextlib.redirect_stdout(buf):
+                    st.session_state["pqc_secured_vault"] = defend_vault(_DEMO_VAULT, report)
+            st.session_state["pqc_log"] = buf.getvalue()
+
+    secured = st.session_state.get("pqc_secured_vault")
+    if secured:
+        col_after.write("**After — ML-KEM-768 vault**")
+        col_after.json({
+            "encryption":  secured["vault_metadata"]["encryption"],
+            "pqc_status":  secured["transactions"][0]["pqc_status"],
+            "transactions": len(secured["transactions"]),
+        })
+        with st.expander("Full secured vault JSON"):
+            st.json(secured)
+        st.caption(st.session_state.get("pqc_log", ""))
+    elif report is None:
+        st.info("Run Quantum Risk Analysis above first.")
+
+    # ── 3. Attack Timeline ─────────────────────────────────────────────────
+    st.markdown("### RSA Break Year Timeline")
+    milestones = [(512, 2026, "CRITICAL"), (1024, 2029, "HIGH"),
+                  (2048, 2033, "MEDIUM"),  (4096, 2040, "LOW")]
+    fig, ax = plt.subplots(figsize=(9, 2.6))
+    ax.set_facecolor("#f8fafc"); fig.patch.set_facecolor("#f8fafc")
+    ax.axhline(0, color="#475467", lw=1.5)
+    for i, (bits, yr, risk) in enumerate(milestones):
+        c = _RISK_COLORS[risk]
+        ax.scatter(yr, 0, s=180, color=c, zorder=3)
+        ax.annotate(
+            f"RSA-{bits}\n{yr}", xy=(yr, 0),
+            xytext=(yr, 0.12 if i % 2 == 0 else -0.17),
+            ha="center", va="bottom" if i % 2 == 0 else "top",
+            fontsize=8, color=c, fontweight="bold",
+            arrowprops=dict(arrowstyle="-", color=c, lw=1),
+        )
+    ax.axvline(2026, color="#344054", lw=1, ls="--", alpha=0.6)
+    ax.text(2026.2, 0.21, "Now", fontsize=8, color="#344054")
+    ax.set(xlim=(2024, 2043), ylim=(-0.32, 0.32), xlabel="Year")
+    ax.set_yticks([])
+    ax.set_title("Projected RSA Break Year by Key Size", fontsize=10)
+    st.pyplot(fig); plt.close(fig)
+
+    # ── 4. Innovative Circuit Demos ────────────────────────────────────────
+    st.markdown("### Quantum Attack Circuit Demos")
+    circuit_choice = st.selectbox(
+        "Circuit", ["Shor's RSA Factoring (N=15 proxy)", "Grover's AES Key Attack"]
+    )
+    kwargs: dict[str, Any] = {}
+    if circuit_choice == "Grover's AES Key Attack":
+        kwargs["n_key_bits"] = st.slider("AES key bits (sim)", 2, 6, 4)
+    ctype = "shor_factoring" if "Shor" in circuit_choice else "grover_aes"
+
+    if st.button("Run Circuit Demo"):
+        with st.spinner("Simulating on Aer…"):
+            st.session_state["circuit_demo"] = run_innovative_circuit_demo(ctype, **kwargs)
+
+    demo = st.session_state.get("circuit_demo")
+    if demo and demo["circuit_type"] == ctype:
+        st.info(demo["interpretation"])
+        d1, d2 = st.columns(2)
+        d1.metric("Circuit Depth", demo["depth"])
+        d2.metric("Qubits", demo["num_qubits"])
+        if ctype == "shor_factoring":
+            rf = demo["extra"]["recovered_factors"]
+            if rf["verified"]:
+                st.success(f"Recovered factors: p={rf['p']}, q={rf['q']} — verified {rf['p']}×{rf['q']}={demo['extra']['N']}")
+        with st.expander("Circuit diagram"):
+            st.code(demo["circuit_diagram"], language=None)
+        top = sorted(demo["sim_counts"].items(), key=lambda x: x[1], reverse=True)[:16]
+        st.bar_chart(pd.DataFrame(top, columns=["state", "shots"]).set_index("state"))
+
+
 def main() -> None:
     configure_page()
     st.title("Quantum Payment Security Auditor")
 
-    tab_score, tab_scenarios, tab_scorecard, tab_benchmark, tab_export = st.tabs(
-        ["Score Payment", "Compare Scenarios", "Algorithm Scorecard", "Benchmark", "Export"]
+    tab_score, tab_scenarios, tab_scorecard, tab_benchmark, tab_export, tab_quantum = st.tabs(
+        ["Score Payment", "Compare Scenarios", "Algorithm Scorecard", "Benchmark", "Export", "Quantum Threat Engine"]
     )
 
     with tab_score:
@@ -310,6 +459,8 @@ def main() -> None:
         render_benchmark_tab()
     with tab_export:
         render_export_tab()
+    with tab_quantum:
+        render_quantum_tab()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,6 @@
+[server]
+headless = true
+
+[runner]
+# Adds src/ to sys.path so `from algorithms.x import y` works without pip install -e .
+pythonPath = ["src"]
